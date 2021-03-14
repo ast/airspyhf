@@ -88,6 +88,7 @@ typedef struct airspyhf_device
 	libusb_device_handle* usb_device;
 	struct libusb_transfer** transfers;
 	airspyhf_sample_block_cb_fn callback;
+    airspyhf_stop_cb_fn stop_callback;
 	pthread_t transfer_thread;
 	pthread_t consumer_thread;
 	pthread_cond_t consumer_cv;
@@ -389,6 +390,10 @@ static void* consumer_threadproc(void *arg)
 		device->received_buffer_count--;
 	}
 
+    if(device->stop_callback != NULL) {
+        device->stop_callback(device->ctx);
+    }
+    
 	pthread_mutex_unlock(&device->consumer_mp);
 
 	pthread_exit(NULL);
@@ -490,7 +495,9 @@ static int kill_io_threads(airspyhf_device_t* device)
 	return AIRSPYHF_SUCCESS;
 }
 
-static int create_io_threads(airspyhf_device_t* device, airspyhf_sample_block_cb_fn callback)
+static int create_io_threads(airspyhf_device_t* device,
+                             airspyhf_sample_block_cb_fn callback,
+                             airspyhf_stop_cb_fn stop_callback)
 {
 	int result;
 	pthread_attr_t attr;
@@ -498,6 +505,7 @@ static int create_io_threads(airspyhf_device_t* device, airspyhf_sample_block_cb
 	if (!device->streaming && !device->stop_requested)
 	{
 		device->callback = callback;
+        device->stop_callback = stop_callback;
 		device->streaming = true;
 
 		result = prepare_transfers(device, LIBUSB_ENDPOINT_IN | AIRSPYHF_ENDPOINT_IN, (libusb_transfer_cb_fn)airspyhf_libusb_transfer_callback);
@@ -1162,10 +1170,41 @@ int ADDCALL airspyhf_start(airspyhf_device_t* device, airspyhf_sample_block_cb_f
 	if (result == AIRSPYHF_SUCCESS)
 	{
 		device->ctx = ctx;
-		result = create_io_threads(device, callback);
+		result = create_io_threads(device, callback, NULL);
 	}
 
 	return result;
+}
+
+int ADDCALL airspyhf_start2(airspyhf_device_t* device,
+                            airspyhf_sample_block_cb_fn callback,
+                            airspyhf_stop_cb_fn stop_callback,
+                            void* ctx)
+{
+    int result;
+
+    memset(device->dropped_buffers_queue, 0, RAW_BUFFER_COUNT * sizeof(uint32_t));
+    device->dropped_buffers = 0;
+
+    device->vec.re = 1.0f;
+    device->vec.im = 0.0f;
+
+    result = airspyhf_set_receiver_mode(device, RECEIVER_MODE_OFF);
+    if (result != AIRSPYHF_SUCCESS)
+    {
+        return result;
+    }
+
+    libusb_clear_halt(device->usb_device, LIBUSB_ENDPOINT_IN | AIRSPYHF_ENDPOINT_IN);
+
+    result = airspyhf_set_receiver_mode(device, RECEIVER_MODE_ON);
+    if (result == AIRSPYHF_SUCCESS)
+    {
+        device->ctx = ctx;
+        result = create_io_threads(device, callback, stop_callback);
+    }
+
+    return result;
 }
 
 int ADDCALL airspyhf_is_streaming(airspyhf_device_t* device)

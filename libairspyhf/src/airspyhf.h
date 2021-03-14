@@ -117,6 +117,7 @@ typedef struct {
 #define MAX_VERSION_STRING_SIZE (64)
 
 typedef int (*airspyhf_sample_block_cb_fn) (airspyhf_transfer_t* transfer_fn);
+typedef void (*airspyhf_stop_cb_fn) (void* ctx);
 
 extern ADDAPI void ADDCALL airspyhf_lib_version(airspyhf_lib_version_t* lib_version);
 extern ADDAPI int ADDCALL airspyhf_list_devices(uint64_t *serials, int count);
@@ -125,6 +126,7 @@ extern ADDAPI int ADDCALL airspyhf_open_sn(airspyhf_device_t** device, uint64_t 
 extern ADDAPI int ADDCALL airspyhf_close(airspyhf_device_t* device);
 extern ADDAPI int ADDCALL airspyhf_get_output_size(airspyhf_device_t* device); /* Returns the number of IQ samples to expect in the callback */
 extern ADDAPI int ADDCALL airspyhf_start(airspyhf_device_t* device, airspyhf_sample_block_cb_fn callback, void* ctx);
+extern ADDAPI int ADDCALL airspyhf_start2(airspyhf_device_t* device, airspyhf_sample_block_cb_fn callback, airspyhf_stop_cb_fn stop_callback, void* ctx);
 extern ADDAPI int ADDCALL airspyhf_stop(airspyhf_device_t* device);
 extern ADDAPI int ADDCALL airspyhf_is_streaming(airspyhf_device_t* device);
 extern ADDAPI int ADDCALL airspyhf_is_low_if(airspyhf_device_t* device); /* Tells if the current sample rate is Zero-IF (0) or Low-IF (1) */
